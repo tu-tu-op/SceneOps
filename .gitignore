@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite3
+.coverage
+.env
+.venv/
+.sceneops/
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+tmp/
+node_modules/
+*.log
+
