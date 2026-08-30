@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sceneops"
+version = "0.1.0"
+description = "Autonomous reliability engineer for media-processing pipelines"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+live = [
+  "google-adk[gcp]>=2.0.0,<3.0.0; python_version >= '3.11'",
+]
+
+[project.scripts]
+sceneops = "sceneops.api:main"
+sceneops-eval = "sceneops.evaluation:main"
+
+[tool.setuptools.packages.find]
+include = ["sceneops*"]
+
+[tool.setuptools.package-data]
+sceneops = ["web/*"]
+
