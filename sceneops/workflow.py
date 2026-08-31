@@ -8,6 +8,7 @@ from sceneops.agent import DeterministicAgent
 from sceneops.config import RuntimeMode, Settings
 from sceneops.domain import Incident, TimelineEvent, new_id
 from sceneops.grafana import MockGrafanaEvidenceProvider
+from sceneops.observability import Observability
 from sceneops.policy import PolicyConfig
 from sceneops.scenarios import (
     ControlledIncident,
@@ -40,10 +41,12 @@ class SceneOpsRuntime:
         self,
         settings: Settings | None = None,
         store: IncidentStore | None = None,
+        observability: Observability | None = None,
     ) -> None:
         self.settings = settings or Settings.from_env()
         self.settings.validate_runtime()
         self.store = store or IncidentStore(self.settings.database_path)
+        self.observability = observability or Observability()
         self.sessions: dict[str, RuntimeSession] = {}
         self.agent = DeterministicAgent()
 
@@ -62,6 +65,7 @@ class SceneOpsRuntime:
             case.simulator,
             provider,
             PolicyConfig(allowed_projects=self.settings.allowed_projects),
+            observability=self.observability,
         )
         incident = service.detect(case)
         self.sessions[incident.id] = RuntimeSession(case, service)
@@ -107,3 +111,34 @@ class SceneOpsRuntime:
             raise KeyError(
                 'incident has no active local runtime session; reinject it'
             ) from exc
+
+    def jobs(self) -> list[dict]:
+        seen = {}
+        for session in self.sessions.values():
+            for job_id, job in session.case.simulator.jobs.items():
+                seen[job_id] = job
+        from sceneops.domain import to_primitive
+
+        return [to_primitive(job) for job in seen.values()]
+
+    def pipelines(self) -> list[dict]:
+        jobs = self.jobs()
+        return [
+            {
+                'id': pipeline_id,
+                'project_id': project_id,
+                'active_jobs': sum(
+                    job['status'] == 'running'
+                    and job['pipeline_id'] == pipeline_id
+                    for job in jobs
+                ),
+                'failed_jobs': sum(
+                    job['status'] == 'failed'
+                    and job['pipeline_id'] == pipeline_id
+                    for job in jobs
+                ),
+            }
+            for project_id, pipeline_id in sorted(
+                {(job['project_id'], job['pipeline_id']) for job in jobs}
+            )
+        ]
