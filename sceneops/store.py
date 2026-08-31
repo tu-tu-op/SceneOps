@@ -24,6 +24,7 @@ from sceneops.domain import (
     VerificationResult,
     to_primitive,
 )
+from sceneops.state_machine import can_transition
 
 
 DEFAULT_DB = Path(os.getenv("SCENEOPS_DB", ".sceneops/sceneops.db"))
@@ -74,6 +75,11 @@ class IncidentStore:
             )
 
     def save_incident(self, incident: Incident) -> None:
+        current = self._current_status(incident.id)
+        if current is not None and current is not incident.status:
+            raise PermissionError(
+                'status changes require an atomic audited save_with_event'
+            )
         payload = json.dumps(to_primitive(incident), separators=(",", ":"))
         with self._connect() as connection:
             self._upsert_incident(connection, incident, payload)
@@ -133,11 +139,24 @@ class IncidentStore:
     def save_with_event(self, incident: Incident, event: TimelineEvent) -> None:
         if event.incident_id != incident.id:
             raise ValueError('event incident does not match snapshot')
+        current = self._current_status(incident.id)
+        if current is not None and current is not incident.status:
+            if not can_transition(current, incident.status):
+                raise ValueError(
+                    f'invalid persisted transition: {current} -> {incident.status}'
+                )
         incident_payload = json.dumps(to_primitive(incident), separators=(',', ':'))
         event_payload = json.dumps(to_primitive(event), separators=(',', ':'))
         with self._connect() as connection:
             self._upsert_incident(connection, incident, incident_payload)
             self._insert_event(connection, event, event_payload)
+
+    def _current_status(self, incident_id: str) -> IncidentStatus | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                'SELECT status FROM incidents WHERE id = ?', (incident_id,)
+            ).fetchone()
+        return IncidentStatus(row['status']) if row else None
 
     def timeline(self, incident_id: str) -> list[TimelineEvent]:
         with self._connect() as connection:
