@@ -64,3 +64,21 @@ The verifier consumes fresh post-action facts. It checks terminal job state, out
 
 Every incident, tool call, policy decision, action attempt, and verification emits a structured event. The first implementation uses JSON logs and a Prometheus text endpoint. Live deployments can ship these signals to Grafana Cloud.
 
+## Implemented local runtime
+
+IncidentService is the only application mutation boundary. It loads persisted
+state, verifies incident/job/project ownership, evaluates action policy,
+validates approval provenance and parameters, checks budgets and retries,
+performs a legal transition, executes through the simulator, writes the
+snapshot and timeline event together, and calls the independent verifier.
+
+SceneOpsRuntime owns process-local simulator sessions and selects either the
+simulation telemetry provider or the dynamic mock-Grafana provider. The HTTP
+API and Mission Control call this same runtime. The evaluator also uses the
+same complete workflow.
+
+The optional single ADK agent exposes evidence reading only. It cannot approve,
+execute, mutate, or verify. Local mode uses the deterministic synthesis adapter.
+
+Live mcp-grafana is intentionally disabled. The adapter and normalization
+contracts on both sides of that boundary are implemented and mock-tested.
