@@ -83,6 +83,24 @@ class SceneOpsHandler(BaseHTTPRequestHandler):
         if path == '/api/scenarios':
             self._json({'scenarios': sorted(SCENARIOS)})
             return
+        if path == '/api/evaluation':
+            evaluation_path = (
+                Path.cwd()
+                / 'evaluation-results'
+                / 'evaluation-results.json'
+            )
+            if not evaluation_path.is_file():
+                self._json({'available': False, 'methods': {}})
+                return
+            results = json.loads(evaluation_path.read_text(encoding='utf-8'))
+            self._json(
+                {
+                    'available': True,
+                    'case_count': results['case_count'],
+                    'methods': results['methods'],
+                }
+            )
+            return
         if path == '/metrics':
             self._text(
                 self.runtime.observability.metrics.prometheus(),

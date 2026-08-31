@@ -79,6 +79,14 @@ class APITests(unittest.TestCase):
         self.assertIn('SceneOps Mission Control', html)
         self.assertIn('Inject controlled failure', html)
 
+    def test_metrics_and_generated_evaluation_summary_are_available(self):
+        with urlopen(self.base + '/metrics', timeout=5) as response:
+            metrics = response.read().decode()
+        self.assertIn('sceneops_incidents_total', metrics)
+        _, summary = self.request('/api/evaluation')
+        self.assertTrue(summary['available'])
+        self.assertEqual(summary['case_count'], 16)
+
 
 if __name__ == '__main__':
     unittest.main()
