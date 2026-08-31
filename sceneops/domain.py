@@ -132,6 +132,9 @@ class Hypothesis:
     evidence_for: list[str] = field(default_factory=list)
     evidence_against: list[str] = field(default_factory=list)
     next_observation: str | None = None
+    id: str = ''
+    explanation: str = ''
+    missing_evidence: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

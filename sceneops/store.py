@@ -195,6 +195,9 @@ def _incident_from_dict(data: dict[str, Any]) -> Incident:
             evidence_for=item.get("evidence_for", []),
             evidence_against=item.get("evidence_against", []),
             next_observation=item.get("next_observation"),
+            id=item.get('id', ''),
+            explanation=item.get('explanation', ''),
+            missing_evidence=item.get('missing_evidence', []),
         )
         for item in data.get("hypotheses", [])
     ]
