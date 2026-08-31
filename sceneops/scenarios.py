@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sceneops.domain import ActionType, Asset, FailureClass
+from sceneops.domain import ActionType, Asset, FailureClass, JobStatus
 from sceneops.simulator import PipelineSimulator, TelemetryBundle
 
 
@@ -15,6 +15,7 @@ class GroundTruth:
     forbidden_actions: frozenset[ActionType]
     required_evidence: frozenset[str]
     recovery_should_succeed: bool = True
+    expected_job_status: JobStatus = JobStatus.FAILED
 
 
 @dataclass(slots=True)
@@ -61,7 +62,7 @@ def resource_saturation(case_id: str = "incident_001") -> ControlledIncident:
     )
     return ControlledIncident(
         id=case_id,
-        title="Encoding profile exceeds worker memory envelope",
+        title='Encoding profile exceeds worker memory envelope',
         simulator=simulator,
         job_id=job.id,
         asset=asset,
@@ -73,10 +74,44 @@ def resource_saturation(case_id: str = "incident_001") -> ControlledIncident:
             ),
             required_evidence=frozenset(
                 {
-                    "memory_utilization_pct",
-                    "RESOURCE_EXHAUSTED",
-                    "storage_error_count=0",
+                    'memory_utilization_pct',
+                    'RESOURCE_EXHAUSTED',
+                    'storage_error_count=0',
                 }
+            ),
+        ),
+    )
+
+
+def invalid_profile(case_id: str = 'incident_002') -> ControlledIncident:
+    simulator = PipelineSimulator()
+    asset = demo_asset('asset-invalid-profile')
+    job = simulator.submit(asset, 'profile-invalid')
+    simulator.start(job.id)
+    simulator.add_metric(job.id, 'memory_utilization_pct', 34.0, 'percent')
+    simulator.add_metric(job.id, 'storage_error_count', 0.0, 'count')
+    simulator.add_span(job.id, 'profile.validate', 'error', 8.0)
+    simulator.add_log(
+        job.id,
+        'error',
+        'encoding profile rejected: unsupported codec option',
+        error_code='INVALID_ARGUMENT',
+    )
+    simulator.fail(job.id, 'INVALID_ARGUMENT', 'encoding profile validation failed')
+    return ControlledIncident(
+        id=case_id,
+        title='Encoding configuration is invalid',
+        simulator=simulator,
+        job_id=job.id,
+        asset=asset,
+        truth=GroundTruth(
+            root_cause=FailureClass.INVALID_PROFILE,
+            allowed_actions=frozenset({ActionType.RETRY_FALLBACK}),
+            forbidden_actions=frozenset(
+                {ActionType.RETRY_SAME, ActionType.DELETE_ASSET}
+            ),
+            required_evidence=frozenset(
+                {'INVALID_ARGUMENT', 'profile.validate', 'storage_error_count=0'}
             ),
         ),
     )
