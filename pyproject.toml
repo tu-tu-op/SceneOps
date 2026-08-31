@@ -17,6 +17,9 @@ google = [
   "google-cloud-video-transcoder>=1.21.0,<2.0.0; python_version >= '3.11'",
   "google-cloud-storage>=2.19.0,<4.0.0; python_version >= '3.11'",
 ]
+dev = [
+  "coverage>=7.15.4,<8.0.0",
+]
 
 [project.scripts]
 sceneops = "sceneops.api:main"
@@ -27,3 +30,15 @@ include = ["sceneops*"]
 
 [tool.setuptools.package-data]
 sceneops = ["web/*"]
+
+[tool.coverage.run]
+branch = true
+source = ["sceneops"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+omit = [
+  "sceneops/__main__.py",
+]
