@@ -2,7 +2,7 @@ import json
 import unittest
 
 from sceneops.domain import FailureClass, JobStatus
-from sceneops.scenarios import invalid_profile, resource_saturation
+from sceneops.scenarios import invalid_profile, resource_saturation, storage_dependency
 
 
 class ScenarioTests(unittest.TestCase):
@@ -10,6 +10,7 @@ class ScenarioTests(unittest.TestCase):
         for factory, expected in (
             (resource_saturation, FailureClass.RESOURCE_SATURATION),
             (invalid_profile, FailureClass.INVALID_PROFILE),
+            (storage_dependency, FailureClass.STORAGE_DEPENDENCY),
         ):
             with self.subTest(factory=factory.__name__):
                 case = factory()

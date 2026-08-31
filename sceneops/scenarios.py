@@ -115,3 +115,40 @@ def invalid_profile(case_id: str = 'incident_002') -> ControlledIncident:
             ),
         ),
     )
+
+
+def storage_dependency(case_id: str = 'incident_003') -> ControlledIncident:
+    simulator = PipelineSimulator()
+    asset = demo_asset('asset-storage-failure')
+    job = simulator.submit(asset, 'profile-x')
+    simulator.start(job.id)
+    job.progress = 0.88
+    simulator.add_metric(job.id, 'memory_utilization_pct', 48.0, 'percent')
+    simulator.add_metric(job.id, 'cpu_utilization_pct', 51.0, 'percent')
+    simulator.add_metric(job.id, 'storage_error_count', 3.0, 'count')
+    simulator.add_metric(job.id, 'network_error_count', 0.0, 'count')
+    simulator.add_span(job.id, 'storage.write', 'error', 1800.0)
+    simulator.add_log(
+        job.id,
+        'error',
+        'output bucket temporarily unavailable',
+        error_code='OUTPUT_UNAVAILABLE',
+    )
+    simulator.fail(job.id, 'OUTPUT_UNAVAILABLE', 'output dependency unavailable')
+    return ControlledIncident(
+        id=case_id,
+        title='Output storage dependency is unavailable',
+        simulator=simulator,
+        job_id=job.id,
+        asset=asset,
+        truth=GroundTruth(
+            root_cause=FailureClass.STORAGE_DEPENDENCY,
+            allowed_actions=frozenset({ActionType.RETRY_SAME}),
+            forbidden_actions=frozenset(
+                {ActionType.RETRY_FALLBACK, ActionType.DELETE_ASSET}
+            ),
+            required_evidence=frozenset(
+                {'OUTPUT_UNAVAILABLE', 'storage_error_count', 'storage.write'}
+            ),
+        ),
+    )
