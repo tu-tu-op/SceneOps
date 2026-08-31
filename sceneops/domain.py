@@ -74,6 +74,15 @@ class ActionLevel(int, Enum):
 
 
 @dataclass(slots=True)
+class Pipeline:
+    id: str
+    project_id: str
+    name: str
+    profile: str = 'profile-x'
+    healthy: bool = True
+
+
+@dataclass(slots=True)
 class Asset:
     id: str
     name: str
@@ -87,6 +96,8 @@ class MediaJob:
     id: str
     asset_id: str
     profile: str
+    project_id: str = 'project-demo'
+    pipeline_id: str = 'pipeline-demo'
     status: JobStatus = JobStatus.PENDING
     progress: float = 0.0
     retry_count: int = 0
@@ -109,6 +120,9 @@ class Evidence:
     observed_at: str = field(default_factory=utc_now)
     supports: list[FailureClass] = field(default_factory=list)
     contradicts: list[FailureClass] = field(default_factory=list)
+    job_id: str = ''
+    pipeline_id: str = ''
+    provenance: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -121,13 +135,21 @@ class Hypothesis:
 
 
 @dataclass(slots=True)
-class RecoveryOption:
+class RecoveryPlan:
     action: ActionType
     title: str
     rationale: str
     risk: str
     estimated_cost: float = 0.0
     fallback_profile: str | None = None
+    parameters: dict[str, Any] = field(default_factory=dict)
+    predicted_consequence: str = ''
+    approval_required: bool = True
+    evidence_ids: list[str] = field(default_factory=list)
+
+
+# Compatibility with the original public contract.
+RecoveryOption = RecoveryPlan
 
 
 @dataclass(slots=True)
@@ -138,6 +160,22 @@ class Approval:
     actor: str
     approved_at: str = field(default_factory=utc_now)
     expires_at: str | None = None
+    parameters_digest: str = ''
+    max_estimated_cost: float = 0.0
+    consumed_at: str | None = None
+
+
+@dataclass(slots=True)
+class ActionAttempt:
+    id: str
+    incident_id: str
+    action: ActionType
+    parameters: dict[str, Any]
+    estimated_cost: float
+    succeeded: bool
+    job_id: str | None = None
+    error: str | None = None
+    created_at: str = field(default_factory=utc_now)
 
 
 @dataclass(slots=True)
@@ -171,10 +209,16 @@ class Incident:
     recovery_options: list[RecoveryOption] = field(default_factory=list)
     selected_recovery: RecoveryOption | None = None
     approvals: list[Approval] = field(default_factory=list)
+    action_attempts: list[ActionAttempt] = field(default_factory=list)
     verification: VerificationResult | None = None
     mode: str = "simulation"
     created_at: str = field(default_factory=utc_now)
     updated_at: str = field(default_factory=utc_now)
+
+
+# Prefer the plan's names while preserving existing imports.
+EvidenceItem = Evidence
+Job = MediaJob
 
 
 def to_primitive(value: Any) -> Any:

@@ -9,6 +9,7 @@ from sceneops.domain import (
     Asset,
     Incident,
     IncidentStatus,
+    Pipeline,
     TimelineEvent,
     new_id,
     to_primitive,
@@ -37,6 +38,12 @@ class DomainTests(unittest.TestCase):
         payload = to_primitive(incident())
         self.assertEqual(payload["status"], "detected")
         self.assertEqual(payload["failure_class"], "unknown")
+
+
+    def test_pipeline_and_job_ownership_are_explicit(self):
+        pipeline = Pipeline('pipeline-demo', 'project-demo', 'Demo')
+        self.assertEqual(pipeline.project_id, 'project-demo')
+        self.assertEqual(incident().pipeline_id, pipeline.id)
 
 
 class StateMachineTests(unittest.TestCase):
