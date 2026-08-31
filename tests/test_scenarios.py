@@ -34,6 +34,11 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual(len(cases), 16)
         self.assertEqual(len({case.id for case in cases}), 16)
         self.assertTrue(all(case.job_id == f'job_{case.id}' for case in cases))
+        for offset in range(0, 16, 4):
+            signatures = {
+                case.telemetry.metrics[-1].value for case in cases[offset : offset + 4]
+            }
+            self.assertEqual(len(signatures), 4)
 
 
 if __name__ == '__main__':

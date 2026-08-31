@@ -196,8 +196,38 @@ SCENARIO_FACTORIES = (
 def scenario_catalog(variants_per_class: int = 4) -> list[ControlledIncident]:
     if variants_per_class < 1:
         raise ValueError('variants_per_class must be positive')
-    return [
-        factory(f'{factory.__name__}_{variant:02d}')
-        for factory in SCENARIO_FACTORIES
-        for variant in range(1, variants_per_class + 1)
-    ]
+    cases = []
+    for factory in SCENARIO_FACTORIES:
+        for variant in range(1, variants_per_class + 1):
+            case = factory(f'{factory.__name__}_{variant:02d}')
+            if case.truth.root_cause is FailureClass.RESOURCE_SATURATION:
+                case.simulator.add_metric(
+                    case.job_id,
+                    'memory_utilization_pct',
+                    93.0 + variant * 1.5,
+                    'percent',
+                )
+            elif case.truth.root_cause is FailureClass.INVALID_PROFILE:
+                case.simulator.add_metric(
+                    case.job_id,
+                    'profile_validation_error_count',
+                    float(variant),
+                    'count',
+                )
+            elif case.truth.root_cause is FailureClass.STORAGE_DEPENDENCY:
+                case.simulator.add_metric(
+                    case.job_id,
+                    'storage_error_count',
+                    float(2 + variant),
+                    'count',
+                )
+            else:
+                case.simulator.add_metric(
+                    case.job_id,
+                    'progress_stalled_seconds',
+                    float(600 + variant * 90),
+                    'seconds',
+                )
+            case.title = f'{case.title} (variant {variant})'
+            cases.append(case)
+    return cases
