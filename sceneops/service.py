@@ -23,6 +23,7 @@ from sceneops.policy import (
     approval_parameters_digest,
     evaluate_action,
 )
+from sceneops.observability import Observability
 from sceneops.recovery import plan_recovery
 from sceneops.scenarios import ControlledIncident
 from sceneops.simulator import PipelineSimulator
@@ -40,12 +41,14 @@ class IncidentService:
         provider: TelemetryProvider,
         policy: PolicyConfig = PolicyConfig(),
         budget_limits: BudgetLimits = BudgetLimits(),
+        observability: Observability | None = None,
     ) -> None:
         self.store = store
         self.simulator = simulator
         self.provider = provider
         self.policy = policy
         self.budget_limits = budget_limits
+        self.observability = observability or Observability()
         self._budgets: dict[str, Budget] = {}
 
     def detect(self, case: ControlledIncident) -> Incident:
@@ -57,6 +60,13 @@ class IncidentService:
         self.store.save_with_event(
             incident,
             self._event(incident, 'incident.detected', 'Failure detected'),
+        )
+        self.observability.record(
+            'incident.detected',
+            project_id=incident.project_id,
+            pipeline_id=incident.pipeline_id,
+            job_id=incident.job_id,
+            incident_id=incident.id,
         )
         return incident
 
@@ -70,6 +80,12 @@ class IncidentService:
         )
         incident.evidence = EvidenceBuilder().collect(
             incident, self.provider, self._budget(incident.id)
+        )
+        self.observability.record(
+            'evidence.collected',
+            project_id=incident.project_id,
+            incident_id=incident.id,
+            job_id=incident.job_id,
         )
         self.store.save_with_event(
             incident,
@@ -143,6 +159,13 @@ class IncidentService:
         request = self._request(incident)
         decision = evaluate_action(request, self.policy)
         if not decision.allowed:
+            self.observability.record(
+                'policy.denied',
+                severity='warning',
+                project_id=incident.project_id,
+                incident_id=incident.id,
+                action=request.action.value,
+            )
             raise PermissionError(decision.reason)
         budget = self._budget(incident.id)
         budget.assert_cost(request.estimated_cost)
@@ -202,6 +225,14 @@ class IncidentService:
                 {'job_id': recovery_job.id, 'action': plan.action.value},
             ),
         )
+        self.observability.record(
+            'recovery.executed',
+            estimated_cost=plan.estimated_cost,
+            project_id=incident.project_id,
+            incident_id=incident.id,
+            job_id=recovery_job.id,
+            action=plan.action.value,
+        )
         return recovery_job.id
 
     def verify(self, incident_id: str, recovery_job_id: str):
@@ -233,6 +264,14 @@ class IncidentService:
                 result.summary,
                 {'checks': result.checks},
             ),
+        )
+        self.observability.record(
+            'verification.passed' if result.passed else 'verification.failed',
+            severity='info' if result.passed else 'error',
+            project_id=incident.project_id,
+            incident_id=incident.id,
+            job_id=recovery_job_id,
+            verification_status='passed' if result.passed else 'failed',
         )
         return result
 
