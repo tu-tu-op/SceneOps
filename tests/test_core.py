@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from math import inf, nan
 from pathlib import Path
 
 from sceneops.budgets import Budget, BudgetExceeded, BudgetLimits
@@ -108,6 +109,20 @@ class BudgetTests(unittest.TestCase):
         budget.record_tool_call()
         with self.assertRaises(BudgetExceeded):
             budget.record_tool_call()
+
+    def test_invalid_costs_fail_before_accounting(self):
+        budget = Budget()
+        for value in (-1, nan, inf, -inf, 'bad'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                budget.record_recovery(value)  # type: ignore[arg-type]
+        self.assertEqual(budget.recovery_attempts, 0)
+        self.assertEqual(budget.estimated_cost, 0.0)
+
+    def test_failed_budget_record_does_not_mutate_state(self):
+        budget = Budget(BudgetLimits(max_estimated_cost=1.0))
+        with self.assertRaises(BudgetExceeded):
+            budget.record_recovery(2.0)
+        self.assertEqual(budget.recovery_attempts, 0)
 
 
 class StoreTests(unittest.TestCase):
