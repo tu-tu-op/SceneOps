@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import argparse
+from dataclasses import replace
 import json
 from pathlib import Path
 import re
@@ -237,3 +239,71 @@ def serve(settings: Settings | None = None) -> None:
         pass
     finally:
         server.server_close()
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog='sceneops', description='SceneOps local reliability control plane'
+    )
+    parser.add_argument('--mode', choices=['simulation', 'mock_grafana', 'live'])
+    parser.add_argument('--db', type=Path)
+    subparsers = parser.add_subparsers(dest='command')
+    serve_parser = subparsers.add_parser('serve', help='launch Mission Control')
+    serve_parser.add_argument('--host')
+    serve_parser.add_argument('--port', type=int)
+    simulate = subparsers.add_parser('simulate', help='inject a local scenario')
+    simulate.add_argument('scenario', choices=sorted(SCENARIOS))
+    simulate.add_argument('--approve', action='store_true')
+    simulate.add_argument('--actor', default='local-cli')
+    subparsers.add_parser('incidents', help='list persisted incidents')
+    evaluate = subparsers.add_parser('evaluate', help='run the evaluator')
+    evaluate.add_argument('--variants', type=int, default=4)
+    evaluate.add_argument('--output', type=Path, default=Path('evaluation-results'))
+    args = parser.parse_args(argv)
+    if args.command is None:
+        parser.print_help()
+        return 0
+    settings = Settings.from_env()
+    changes = {}
+    if args.mode:
+        from sceneops.config import RuntimeMode
+
+        changes['mode'] = RuntimeMode(args.mode)
+    if args.db:
+        changes['database_path'] = args.db
+    settings = replace(settings, **changes)
+    if args.command == 'serve':
+        settings = replace(
+            settings,
+            host=args.host or settings.host,
+            port=args.port or settings.port,
+        )
+        serve(settings)
+        return 0
+    if args.command == 'simulate':
+        runtime = SceneOpsRuntime(settings)
+        incident = (
+            runtime.run(args.scenario, args.actor)
+            if args.approve
+            else runtime.inject(args.scenario)
+        )
+        print(json.dumps(to_primitive(incident), indent=2))
+        return 0
+    if args.command == 'incidents':
+        runtime = SceneOpsRuntime(settings)
+        print(
+            json.dumps(
+                [to_primitive(item) for item in runtime.store.list_incidents()],
+                indent=2,
+            )
+        )
+        return 0
+    from sceneops.evaluation import main as evaluation_main
+
+    return evaluation_main(
+        ['--variants', str(args.variants), '--output', str(args.output)]
+    )
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
