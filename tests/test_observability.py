@@ -14,6 +14,7 @@ class ObservabilityTests(unittest.TestCase):
         self.assertIn('sceneops_incidents_total 1', text)
         self.assertIn('sceneops_estimated_cost 1.25', text)
         self.assertNotIn('incident_id', text)
+        self.assertIn('# TYPE sceneops_pipeline_active_jobs gauge', text)
 
     def test_structured_log_uses_stable_schema_and_drops_unknown_fields(self):
         stream = io.StringIO()

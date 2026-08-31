@@ -24,11 +24,34 @@ METRIC_EVENTS = {
     'error': 'sceneops_errors_total',
 }
 
+METRIC_TYPES = {
+    'sceneops_job_processing_seconds': 'gauge',
+    'sceneops_job_status': 'gauge',
+    'sceneops_job_retries_total': 'counter',
+    'sceneops_pipeline_active_jobs': 'gauge',
+    'sceneops_pipeline_failed_jobs_total': 'counter',
+    'sceneops_worker_memory_utilization': 'gauge',
+    'sceneops_worker_cpu_utilization': 'gauge',
+    'sceneops_output_validation_failures_total': 'counter',
+    'sceneops_agent_tool_calls_total': 'counter',
+    'sceneops_agent_tool_errors_total': 'counter',
+    'sceneops_incident_diagnosis_seconds': 'gauge',
+    'sceneops_recovery_attempts_total': 'counter',
+    'sceneops_verification_failures_total': 'counter',
+    'sceneops_verification_successes_total': 'counter',
+    'sceneops_policy_denials_total': 'counter',
+    'sceneops_budget_denials_total': 'counter',
+    'sceneops_escalations_total': 'counter',
+    'sceneops_incidents_total': 'counter',
+    'sceneops_evidence_queries_total': 'counter',
+    'sceneops_errors_total': 'counter',
+    'sceneops_estimated_cost': 'counter',
+}
+
 
 class Metrics:
     def __init__(self) -> None:
-        self._values = {name: 0.0 for name in METRIC_EVENTS.values()}
-        self._values['sceneops_estimated_cost'] = 0.0
+        self._values = {name: 0.0 for name in METRIC_TYPES}
         self._lock = Lock()
 
     def record(self, event: str, estimated_cost: float = 0.0) -> None:
@@ -43,9 +66,17 @@ class Metrics:
         with self._lock:
             values = dict(self._values)
         return ''.join(
-            f'# TYPE {name} counter\n{name} {value:g}\n'
+            f'# TYPE {name} {METRIC_TYPES[name]}\n{name} {value:g}\n'
             for name, value in sorted(values.items())
         )
+
+    def set(self, name: str, value: float) -> None:
+        if name not in METRIC_TYPES:
+            raise ValueError('unknown metric')
+        if not isinstance(value, (int, float)) or value < 0:
+            raise ValueError('metric values must be non-negative numbers')
+        with self._lock:
+            self._values[name] = float(value)
 
 
 class StructuredLogger:
