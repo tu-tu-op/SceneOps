@@ -50,7 +50,7 @@ class TelemetryProvider(Protocol):
 
 
 class LocalTelemetryProvider:
-    name = 'local'
+    name = 'simulation'
 
     def __init__(self, simulator: PipelineSimulator) -> None:
         self.simulator = simulator
