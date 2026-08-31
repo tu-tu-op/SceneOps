@@ -66,9 +66,10 @@ class PipelineSimulator:
         retry_count: int = 0,
         project_id: str = 'project-demo',
         pipeline_id: str = 'pipeline-demo',
+        job_id: str | None = None,
     ) -> MediaJob:
         job = MediaJob(
-            id=new_id("job"),
+            id=job_id or new_id("job"),
             asset_id=asset.id,
             profile=profile,
             project_id=project_id,

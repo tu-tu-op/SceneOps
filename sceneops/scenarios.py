@@ -44,7 +44,7 @@ def demo_asset(asset_id: str = "asset-episode-04") -> Asset:
 def resource_saturation(case_id: str = "incident_001") -> ControlledIncident:
     simulator = PipelineSimulator()
     asset = demo_asset()
-    job = simulator.submit(asset, "profile-x")
+    job = simulator.submit(asset, 'profile-x', job_id=f'job_{case_id}')
     simulator.start(job.id)
     job.progress = 0.62
     for memory in (71.0, 84.0, 92.0, 97.0):
@@ -86,7 +86,7 @@ def resource_saturation(case_id: str = "incident_001") -> ControlledIncident:
 def invalid_profile(case_id: str = 'incident_002') -> ControlledIncident:
     simulator = PipelineSimulator()
     asset = demo_asset('asset-invalid-profile')
-    job = simulator.submit(asset, 'profile-invalid')
+    job = simulator.submit(asset, 'profile-invalid', job_id=f'job_{case_id}')
     simulator.start(job.id)
     simulator.add_metric(job.id, 'memory_utilization_pct', 34.0, 'percent')
     simulator.add_metric(job.id, 'storage_error_count', 0.0, 'count')
@@ -120,7 +120,7 @@ def invalid_profile(case_id: str = 'incident_002') -> ControlledIncident:
 def storage_dependency(case_id: str = 'incident_003') -> ControlledIncident:
     simulator = PipelineSimulator()
     asset = demo_asset('asset-storage-failure')
-    job = simulator.submit(asset, 'profile-x')
+    job = simulator.submit(asset, 'profile-x', job_id=f'job_{case_id}')
     simulator.start(job.id)
     job.progress = 0.88
     simulator.add_metric(job.id, 'memory_utilization_pct', 48.0, 'percent')
@@ -152,3 +152,52 @@ def storage_dependency(case_id: str = 'incident_003') -> ControlledIncident:
             ),
         ),
     )
+
+
+def stuck_job(case_id: str = 'incident_004') -> ControlledIncident:
+    simulator = PipelineSimulator()
+    asset = demo_asset('asset-stuck-job')
+    job = simulator.submit(asset, 'profile-x', job_id=f'job_{case_id}')
+    simulator.start(job.id)
+    job.progress = 0.31
+    simulator.add_metric(job.id, 'job_runtime_seconds', 2400.0, 'seconds')
+    simulator.add_metric(job.id, 'progress_stalled_seconds', 900.0, 'seconds')
+    simulator.add_metric(job.id, 'memory_utilization_pct', 22.0, 'percent')
+    simulator.add_metric(job.id, 'cpu_utilization_pct', 7.0, 'percent')
+    simulator.add_metric(job.id, 'storage_error_count', 0.0, 'count')
+    simulator.add_span(job.id, 'encoder.run', 'running', 2400000.0)
+    simulator.add_log(job.id, 'warning', 'job has made no progress for 15 minutes')
+    return ControlledIncident(
+        id=case_id,
+        title='Transcode job is running without progress',
+        simulator=simulator,
+        job_id=job.id,
+        asset=asset,
+        truth=GroundTruth(
+            root_cause=FailureClass.STUCK_JOB,
+            allowed_actions=frozenset({ActionType.RETRY_SAME}),
+            forbidden_actions=frozenset({ActionType.DELETE_ASSET}),
+            required_evidence=frozenset(
+                {'job_runtime_seconds', 'progress_stalled_seconds', 'running'}
+            ),
+            expected_job_status=JobStatus.RUNNING,
+        ),
+    )
+
+
+SCENARIO_FACTORIES = (
+    resource_saturation,
+    invalid_profile,
+    storage_dependency,
+    stuck_job,
+)
+
+
+def scenario_catalog(variants_per_class: int = 4) -> list[ControlledIncident]:
+    if variants_per_class < 1:
+        raise ValueError('variants_per_class must be positive')
+    return [
+        factory(f'{factory.__name__}_{variant:02d}')
+        for factory in SCENARIO_FACTORIES
+        for variant in range(1, variants_per_class + 1)
+    ]
