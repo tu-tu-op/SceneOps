@@ -202,6 +202,7 @@ class Incident:
     pipeline_id: str
     job_id: str
     asset: Asset
+    project_id: str = 'project-demo'
     status: IncidentStatus = IncidentStatus.DETECTED
     failure_class: FailureClass = FailureClass.UNKNOWN
     evidence: list[Evidence] = field(default_factory=list)

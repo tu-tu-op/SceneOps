@@ -15,7 +15,12 @@ from sceneops.domain import (
     new_id,
     to_primitive,
 )
-from sceneops.policy import ActionRequest, PolicyConfig, evaluate_action
+from sceneops.policy import (
+    ActionRequest,
+    PolicyConfig,
+    approval_parameters_digest,
+    evaluate_action,
+)
 from sceneops.state_machine import InvalidTransition, transition
 from sceneops.store import IncidentStore
 
@@ -76,13 +81,19 @@ class PolicyTests(unittest.TestCase):
             action=ActionType.RETRY_FALLBACK,
             actor="operator@example.com",
         )
+        request = ActionRequest(
+            ActionType.RETRY_FALLBACK,
+            item,
+            fallback_profile="sceneops-safe-hd",
+            project_id='project-demo',
+            job_project_id='project-demo',
+            approval=approval,
+        )
+        approval.parameters_digest = approval_parameters_digest(request)
+        approval.max_estimated_cost = request.estimated_cost
+        item.approvals.append(approval)
         decision = evaluate_action(
-            ActionRequest(
-                ActionType.RETRY_FALLBACK,
-                item,
-                fallback_profile="sceneops-safe-hd",
-                approval=approval,
-            )
+            request
         )
         self.assertTrue(decision.allowed)
 
@@ -96,11 +107,34 @@ class PolicyTests(unittest.TestCase):
                 ActionType.RETRY_FALLBACK,
                 item,
                 fallback_profile="untrusted-profile",
+                project_id='project-demo',
+                job_project_id='project-demo',
                 approval=approval,
             ),
             PolicyConfig(),
         )
         self.assertFalse(decision.allowed)
+
+    def test_read_only_requires_allowed_owned_project(self):
+        item = incident()
+        denied = evaluate_action(
+            ActionRequest(
+                ActionType.QUERY,
+                item,
+                project_id='other-project',
+                job_project_id='other-project',
+            )
+        )
+        allowed = evaluate_action(
+            ActionRequest(
+                ActionType.QUERY,
+                item,
+                project_id='project-demo',
+                job_project_id='project-demo',
+            )
+        )
+        self.assertFalse(denied.allowed)
+        self.assertTrue(allowed.allowed)
 
 
 class BudgetTests(unittest.TestCase):
