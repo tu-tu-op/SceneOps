@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from sceneops.domain import (
+    ActionAttempt,
     ActionType,
     Approval,
     Asset,
@@ -75,7 +76,13 @@ class IncidentStore:
     def save_incident(self, incident: Incident) -> None:
         payload = json.dumps(to_primitive(incident), separators=(",", ":"))
         with self._connect() as connection:
-            connection.execute(
+            self._upsert_incident(connection, incident, payload)
+
+    @staticmethod
+    def _upsert_incident(
+        connection: sqlite3.Connection, incident: Incident, payload: str
+    ) -> None:
+        connection.execute(
                 """
                 INSERT INTO incidents (id, status, updated_at, payload)
                 VALUES (?, ?, ?, ?)
@@ -108,7 +115,13 @@ class IncidentStore:
     def append_event(self, event: TimelineEvent) -> None:
         payload = json.dumps(to_primitive(event), separators=(",", ":"))
         with self._connect() as connection:
-            connection.execute(
+            self._insert_event(connection, event, payload)
+
+    @staticmethod
+    def _insert_event(
+        connection: sqlite3.Connection, event: TimelineEvent, payload: str
+    ) -> None:
+        connection.execute(
                 """
                 INSERT INTO timeline_events
                     (id, incident_id, type, created_at, payload)
@@ -116,6 +129,15 @@ class IncidentStore:
                 """,
                 (event.id, event.incident_id, event.type, event.created_at, payload),
             )
+
+    def save_with_event(self, incident: Incident, event: TimelineEvent) -> None:
+        if event.incident_id != incident.id:
+            raise ValueError('event incident does not match snapshot')
+        incident_payload = json.dumps(to_primitive(incident), separators=(',', ':'))
+        event_payload = json.dumps(to_primitive(event), separators=(',', ':'))
+        with self._connect() as connection:
+            self._upsert_incident(connection, incident, incident_payload)
+            self._insert_event(connection, event, event_payload)
 
     def timeline(self, incident_id: str) -> list[TimelineEvent]:
         with self._connect() as connection:
@@ -139,6 +161,10 @@ def _recovery(data: dict[str, Any] | None) -> RecoveryOption | None:
         risk=data["risk"],
         estimated_cost=data.get("estimated_cost", 0.0),
         fallback_profile=data.get("fallback_profile"),
+        parameters=data.get('parameters', {}),
+        predicted_consequence=data.get('predicted_consequence', ''),
+        approval_required=data.get('approval_required', True),
+        evidence_ids=data.get('evidence_ids', []),
     )
 
 
@@ -156,6 +182,9 @@ def _incident_from_dict(data: dict[str, Any]) -> Incident:
             contradicts=[
                 FailureClass(value) for value in item.get("contradicts", [])
             ],
+            job_id=item.get('job_id', ''),
+            pipeline_id=item.get('pipeline_id', ''),
+            provenance=item.get('provenance', {}),
         )
         for item in data.get("evidence", [])
     ]
@@ -177,6 +206,9 @@ def _incident_from_dict(data: dict[str, Any]) -> Incident:
             actor=item["actor"],
             approved_at=item["approved_at"],
             expires_at=item.get("expires_at"),
+            parameters_digest=item.get('parameters_digest', ''),
+            max_estimated_cost=item.get('max_estimated_cost', 0.0),
+            consumed_at=item.get('consumed_at'),
         )
         for item in data.get("approvals", [])
     ]
@@ -189,6 +221,7 @@ def _incident_from_dict(data: dict[str, Any]) -> Incident:
         pipeline_id=data["pipeline_id"],
         job_id=data["job_id"],
         asset=asset,
+        project_id=data.get('project_id', 'project-demo'),
         status=IncidentStatus(data["status"]),
         failure_class=FailureClass(data.get("failure_class", "unknown")),
         evidence=evidence,
@@ -200,6 +233,20 @@ def _incident_from_dict(data: dict[str, Any]) -> Incident:
         ],
         selected_recovery=_recovery(data.get("selected_recovery")),
         approvals=approvals,
+        action_attempts=[
+            ActionAttempt(
+                id=item['id'],
+                incident_id=item['incident_id'],
+                action=ActionType(item['action']),
+                parameters=item.get('parameters', {}),
+                estimated_cost=item.get('estimated_cost', 0.0),
+                succeeded=item.get('succeeded', False),
+                job_id=item.get('job_id'),
+                error=item.get('error'),
+                created_at=item['created_at'],
+            )
+            for item in data.get('action_attempts', [])
+        ],
         verification=verification,
         mode=data.get("mode", "simulation"),
         created_at=data["created_at"],

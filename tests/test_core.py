@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from math import inf, nan
+import sqlite3
 from pathlib import Path
 
 from sceneops.budgets import Budget, BudgetExceeded, BudgetLimits
@@ -176,6 +177,22 @@ class StoreTests(unittest.TestCase):
             self.assertIsNotNone(restored)
             self.assertEqual(restored.asset.name, item.asset.name)
             self.assertEqual(store.timeline(item.id)[0].message, "Failure detected")
+
+    def test_snapshot_and_event_roll_back_together(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = IncidentStore(Path(directory) / 'sceneops.db')
+            item = incident()
+            store.save_incident(item)
+            event = TimelineEvent('duplicate', item.id, 'first', 'first')
+            store.append_event(event)
+            item.status = IncidentStatus.INVESTIGATING
+            with self.assertRaises(sqlite3.IntegrityError):
+                store.save_with_event(
+                    item, TimelineEvent('duplicate', item.id, 'second', 'second')
+                )
+            self.assertEqual(
+                store.get_incident(item.id).status, IncidentStatus.DETECTED
+            )
 
 
 if __name__ == "__main__":
