@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="SceneOps Mission Control for evidence-driven media recovery.">
+  <title>SceneOps Mission Control</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div><p class="eyebrow">MEDIA RELIABILITY CONTROL PLANE</p><h1>Scene<span>Ops</span></h1></div>
+    <div class="runtime"><i id="health-dot"></i><span id="health-label">Connecting</span><b id="mode-badge">SIMULATION</b></div>
+  </header>
+  <main>
+    <section class="summary" aria-label="Pipeline summary">
+      <article><span>Pipeline</span><strong id="pipeline-health">Healthy</strong></article>
+      <article><span>Active jobs</span><strong id="active-jobs">0</strong></article>
+      <article><span>Failed / at risk</span><strong id="failed-jobs">0</strong></article>
+      <article><span>Incidents</span><strong id="incident-count">0</strong></article>
+      <form id="inject-form">
+        <label for="scenario">Inject controlled failure</label>
+        <div><select id="scenario">
+          <option value="resource_saturation">Resource saturation</option>
+          <option value="invalid_profile">Invalid profile</option>
+          <option value="storage_dependency">Storage dependency</option>
+          <option value="stuck_job">Stuck job</option>
+        </select><button type="submit">Inject</button></div>
+      </form>
+    </section>
+    <section class="workspace">
+      <aside>
+        <div class="heading"><div><p class="eyebrow">INCIDENT QUEUE</p><h2>Active work</h2></div><button id="refresh" class="secondary" aria-label="Refresh">↻</button></div>
+        <div id="incident-list"><p class="muted">Inject a scenario to begin.</p></div>
+      </aside>
+      <div id="incident-detail" class="detail empty"><div class="mark">SO</div><h2>No incident selected</h2><p>Inject a controlled failure to watch the complete workflow.</p></div>
+    </section>
+  </main>
+  <template id="detail-template">
+    <div class="incident-head"><div><p class="eyebrow">ACTIVE INCIDENT</p><h2 id="incident-title"></h2><p id="incident-meta" class="muted"></p></div><b id="incident-status" class="status"></b></div>
+    <div class="flow"><span>Detect</span><i></i><span>Investigate</span><i></i><span>Diagnose</span><i></i><span>Recover</span><i></i><span>Verify</span></div>
+    <div class="detail-grid">
+      <section class="panel"><p class="eyebrow">DIAGNOSIS</p><div id="primary-hypothesis"></div><details><summary>Competing hypotheses</summary><div id="alternative-hypotheses"></div></details></section>
+      <section class="panel"><p class="eyebrow">RECOVERY</p><div id="recovery-plan"></div><label for="actor">Local development identity</label><input id="actor" value="operator@local.dev"><div class="actions"><button id="approve-button">Approve</button><button id="execute-button" disabled>Execute</button><button id="verify-button" disabled>Verify</button></div><p id="action-message" role="status" class="muted"></p></section>
+      <section class="panel"><p class="eyebrow">AUDIT TRAIL</p><h3>Timeline</h3><ol id="timeline"></ol></section>
+      <section class="panel"><p class="eyebrow">EVIDENCE</p><div class="tabs"><button class="tab active" data-source="all">Normalized</button><button class="tab" data-source="metrics">Metrics</button><button class="tab" data-source="logs">Logs</button></div><div id="evidence-list"></div></section>
+      <section class="panel verification-panel"><p class="eyebrow">VERIFICATION</p><b id="verification-state" class="verification pending">PENDING</b><div id="verification-checks"></div></section>
+    </div>
+  </template>
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>

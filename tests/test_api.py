@@ -73,6 +73,12 @@ class APITests(unittest.TestCase):
         payload = json.loads(raised.exception.read())
         self.assertEqual(payload['error'], 'invalid_request')
 
+    def test_mission_control_static_shell_is_served(self):
+        with urlopen(self.base + '/', timeout=5) as response:
+            html = response.read().decode()
+        self.assertIn('SceneOps Mission Control', html)
+        self.assertIn('Inject controlled failure', html)
+
 
 if __name__ == '__main__':
     unittest.main()

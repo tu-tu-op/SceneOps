@@ -177,7 +177,9 @@ class SceneOpsHandler(BaseHTTPRequestHandler):
         return value
 
     def _static(self, path: str) -> None:
-        relative = 'index.html' if path == '/' else path.removeprefix('/')
+        relative = (
+            'index.html' if path == '/' else path.removeprefix('/assets/')
+        )
         target = (WEB_ROOT / relative).resolve()
         if WEB_ROOT.resolve() not in target.parents or not target.is_file():
             self._json({'error': 'not_found', 'message': 'asset not found'}, 404)
