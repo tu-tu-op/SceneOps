@@ -8,6 +8,10 @@ from typing import Any
 from sceneops.domain import Asset, JobStatus, MediaJob, new_id, to_primitive, utc_now
 
 
+class InvalidJobTransition(ValueError):
+    pass
+
+
 @dataclass(slots=True)
 class MetricSample:
     name: str
@@ -55,11 +59,20 @@ class PipelineSimulator:
         self.traces: dict[str, list[TraceSpan]] = {}
         self.outputs: dict[str, dict[str, Any]] = {}
 
-    def submit(self, asset: Asset, profile: str, retry_count: int = 0) -> MediaJob:
+    def submit(
+        self,
+        asset: Asset,
+        profile: str,
+        retry_count: int = 0,
+        project_id: str = 'project-demo',
+        pipeline_id: str = 'pipeline-demo',
+    ) -> MediaJob:
         job = MediaJob(
             id=new_id("job"),
             asset_id=asset.id,
             profile=profile,
+            project_id=project_id,
+            pipeline_id=pipeline_id,
             retry_count=retry_count,
             labels={"pipeline": "sceneops-demo", "asset_id": asset.id},
         )
@@ -72,6 +85,7 @@ class PipelineSimulator:
 
     def start(self, job_id: str) -> MediaJob:
         job = self.jobs[job_id]
+        self._require(job, JobStatus.PENDING, JobStatus.RUNNING)
         job.status = JobStatus.RUNNING
         job.started_at = utc_now()
         self.add_log(job_id, "info", "transcode worker started")
@@ -99,6 +113,10 @@ class PipelineSimulator:
 
     def fail(self, job_id: str, code: str, message: str) -> MediaJob:
         job = self.jobs[job_id]
+        self._require(job, JobStatus.RUNNING, JobStatus.FAILED)
+        if job.output_uri:
+            self.outputs.pop(job.output_uri, None)
+        job.output_uri = None
         job.status = JobStatus.FAILED
         job.error_code = code
         job.error_message = message
@@ -108,9 +126,14 @@ class PipelineSimulator:
 
     def succeed(self, job_id: str, size_bytes: int, duration_seconds: float) -> MediaJob:
         job = self.jobs[job_id]
+        self._require(job, JobStatus.RUNNING, JobStatus.SUCCEEDED)
+        if size_bytes <= 0 or duration_seconds <= 0:
+            raise ValueError('output metadata must be positive')
         job.status = JobStatus.SUCCEEDED
         job.progress = 1.0
         job.ended_at = utc_now()
+        job.error_code = None
+        job.error_message = None
         job.output_uri = f"gs://sceneops-output/{job.id}/output.mp4"
         self.outputs[job.output_uri] = {
             "size_bytes": size_bytes,
@@ -119,6 +142,13 @@ class PipelineSimulator:
         }
         self.add_log(job_id, "info", "transcode completed")
         return job
+
+    @staticmethod
+    def _require(job: MediaJob, current: JobStatus, target: JobStatus) -> None:
+        if job.status is not current:
+            raise InvalidJobTransition(
+                f'cannot transition job {job.id}: {job.status} -> {target}'
+            )
 
     def bundle(self, job_id: str) -> TelemetryBundle:
         job = self.jobs[job_id]
